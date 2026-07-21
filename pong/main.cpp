@@ -48,6 +48,20 @@ struct {
 
 HBITMAP hBack;// хэндл для фонового изображения
 
+struct mouse {
+    int x, y;
+};
+
+mouse Mouse;
+
+void UpdateMouse()
+{
+    POINT p;
+    GetCursorPos(&p);              // координаты экрана
+    ScreenToClient(window.hWnd, &p); // координаты окна
+    Mouse.x = p.x;
+    Mouse.y = p.y;
+}
 
 void InitGame()
 {
@@ -222,7 +236,7 @@ void ShowRacketAndBall()
         ShowBitmap(window.context, skelet.x, skelet.y, skelet.width, skelet.height, skelet.hBitmap);
     }
 
-    //ShowBitmap(window.context, babka.x - babka.width / 2, babka.y - babka.height / 2, babka.width, babka.height, babka.hBitmap); //бабочка
+    ShowBitmap(window.context, babka.x - babka.width / 2, babka.y - babka.height / 2, babka.width, babka.height, babka.hBitmap); //бабочка
 
     //ShowBitmap(window.context, ball.x - ball.rad, ball.y - ball.rad, 2 * ball.rad, 2 * ball.rad, ball.hBitmap, true);// шарик
 
@@ -287,7 +301,7 @@ void ProcessBall()
 }
 void UpdatePhysics()
 {
-   float GRAVITY = 10.2; //скорость гравитации
+   float GRAVITY = 0; //скорость гравитации
    float GROUND_Y = window.height - Hero.height - 10;
 
     if (isJumping) 
@@ -350,9 +364,29 @@ void ColisionEnemy(float x, float y)
     //    DamagCalculator();
     //}
 }
+bool IsMouseOnSprite(int mx, int my, const sprite& s)
+{
+    return mx >= s.x && mx <= s.x + s.width &&
+        my >= s.y && my <= s.y + s.height;
+}
+
 void ProcessInput()
 {
-    if (GetAsyncKeyState(VK_LEFT)) Hero.x -= Hero.speed;
+
+    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+    {
+        if (IsMouseOnSprite(Mouse.x, Mouse.y, babka))
+        {
+            // клик по бабке
+            ProcessSound("click.wav");
+            babka.x += 20; // пример реакции
+        }
+    }
+
+    if (GetAsyncKeyState(VK_RBUTTON)) {
+        Hero.y = Mouse.y;
+        Hero.x = Mouse.x;
+    }
 
     if (GetAsyncKeyState(VK_RIGHT)) Hero.x += Hero.speed;
 
@@ -381,6 +415,10 @@ void ProcessInput()
         }
     }
 }
+
+
+
+
 
 void MoveEnemy() {
     // Расчет расстояния до героя
@@ -508,11 +546,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     InitGame();//здесь инициализируем переменные игры
 
     mciSendString(TEXT("play ..\\Debug\\МузыкаФон.mp3 repeat"), NULL, 0, NULL);
-    ShowCursor(NULL);
+    //ShowCursor(NULL);
     
     while (!GetAsyncKeyState(VK_ESCAPE))
     {
-        
+        UpdateMouse();
         ShowRacketAndBall();//рисуем фон, ракетку и шарик
         ShowScore();//рисуем очик и жизни
         BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
