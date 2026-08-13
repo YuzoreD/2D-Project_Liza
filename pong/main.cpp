@@ -14,14 +14,22 @@ int swordDisplayFrames = 0;
 const int SWORD_DISPLAY_DURATION = 10;
 
 // секция данных игры  
-typedef struct {
+struct sprite {
     float x, y, width, height, rad, dx, dy, speed, jump, speedjump, vy;
     int direction;
     int hp;
     int hpMax;
     int damage;
     HBITMAP hBitmap;//хэндл к спрайту шарика 
-} sprite;
+
+    HBITMAP* frames;
+    int frameCount;
+    int currentFrame;
+    int frameDelay;
+    int frameTick;
+    bool faceLeft = false;
+
+} ;
 
 sprite Hero;//ракетка игрока
 sprite enemy;//ракетка противника
@@ -34,6 +42,10 @@ sprite hp;
 sprite bable;
 sprite sword; //меч
 sprite bite; // укус
+sprite inventory; //инвентарь
+sprite door;
+sprite Human;
+
 
 struct {
     int score, balls;//количество набранных очков и оставшихся "жизней"
@@ -47,12 +59,40 @@ struct {
 } window;
 
 HBITMAP hBack;// хэндл для фонового изображения
+HBITMAP HumanRun[8];
 
 struct mouse {
-    int x, y;
+    float x, y;
 };
 
 mouse Mouse;
+
+void InitAnimation(sprite& object, HBITMAP* frames, int frameCount, int frameDelay)
+{
+    object.frames = frames;
+    object.frameCount = frameCount;
+    object.currentFrame = 0;
+    object.frameDelay = frameDelay;
+    object.frameTick = 0;
+    object.hBitmap = frames[0];
+}
+
+void UpdateAnimation(sprite& object)
+{
+    if (object.frameCount <= 0) return;
+
+    object.frameTick++;
+    if (object.frameTick >= object.frameDelay)
+    {
+        object.frameTick = 0;
+        object.currentFrame++;
+        if (object.currentFrame >= object.frameCount)
+            object.currentFrame = 0;
+
+        object.hBitmap = object.frames[object.currentFrame];
+    }
+}
+
 
 void UpdateMouse()
 {
@@ -62,6 +102,11 @@ void UpdateMouse()
     Mouse.x = p.x;
     Mouse.y = p.y;
 }
+
+bool butterflyPicked = false;
+bool butterflySelected = false;
+bool doorOpened = false;
+bool prevLButton = false;
 
 void InitGame()
 {
@@ -80,6 +125,10 @@ void InitGame()
     bable.hBitmap = (HBITMAP)LoadImageA(NULL, "пузырь.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     sword.hBitmap = (HBITMAP)LoadImageA(NULL, "меч.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     bite.hBitmap = (HBITMAP)LoadImageA(NULL, "укус.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    inventory.hBitmap = (HBITMAP)LoadImageA(NULL, "инвентарь.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    door.hBitmap = (HBITMAP)LoadImageA(NULL, "дверь.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    Human.hBitmap = (HBITMAP)LoadImageA(NULL, "1.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+   
 
     //------------------------------------------------------
 
@@ -105,8 +154,8 @@ void InitGame()
     skelet.hpMax = 2;
     skelet.damage = 1;
 
-    babka.width = 50;
-    babka.height = 50;
+    babka.width = 70;
+    babka.height = 70;
     babka.speed = 30;
     babka.x = 400;
     babka.y = 200;
@@ -141,6 +190,35 @@ void InitGame()
     bite.height = 50;
     bite.x = skelet.x - bite.width;
     bite.y = skelet.y;
+
+    inventory.width = 1000;
+    inventory.height = 100;
+    inventory.x = 550;
+    inventory.y = 950;
+
+    door.width = 100;
+    door.height = 200;
+    door.x = 1700;
+    door.y = 700;
+
+    Human.width = 200;
+    Human.height = 300;
+    Human.x = window.width/2;
+    Human.y = window.height / 2;
+    Human.vy = 0;
+    Human.speed = 20;
+   
+
+    HumanRun[0] = (HBITMAP)LoadImageA(NULL, "1.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[1] = (HBITMAP)LoadImageA(NULL, "2.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[2] = (HBITMAP)LoadImageA(NULL, "3.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[3] = (HBITMAP)LoadImageA(NULL, "4.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[4] = (HBITMAP)LoadImageA(NULL, "5.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[5] = (HBITMAP)LoadImageA(NULL, "6.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[6] = (HBITMAP)LoadImageA(NULL, "7.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    HumanRun[7] = (HBITMAP)LoadImageA(NULL, "8.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+
+    InitAnimation(Human, HumanRun, 8, 3);
 
     enemy.x = Hero.x;//х координату оппонета ставим в ту же точку что и игрока
 
@@ -187,32 +265,46 @@ void ShowScore()
 
 
 
-void ShowBitmap(HDC hDC, int x, int y, int x1, int y1, HBITMAP hBitmapBall, bool alpha = false)
+void ShowBitmap(HDC hDC, int x, int y, int x1, int y1, HBITMAP hBitmapBall, bool alpha = false, bool mirrorX = false)
 {
-    HBITMAP hbm, hOldbm;
+    HBITMAP hOldbm;
     HDC hMemDC;
     BITMAP bm;
 
-    hMemDC = CreateCompatibleDC(hDC); // Создаем контекст памяти, совместимый с контекстом отображения
-    hOldbm = (HBITMAP)SelectObject(hMemDC, hBitmapBall);// Выбираем изображение bitmap в контекст памяти
+    hMemDC = CreateCompatibleDC(hDC);
+    hOldbm = (HBITMAP)SelectObject(hMemDC, hBitmapBall);
 
-    if (hOldbm) // Если не было ошибок, продолжаем работу
+    if (hOldbm)
     {
-        GetObject(hBitmapBall, sizeof(BITMAP), (LPSTR)&bm); // Определяем размеры изображения
+        GetObject(hBitmapBall, sizeof(BITMAP), (LPSTR)&bm);
 
         if (alpha)
         {
-            TransparentBlt(window.context, x, y, x1, y1, hMemDC, 0, 0, x1, y1, RGB(0, 0, 0));//все пиксели черного цвета будут интепретированы как прозрачные
+            if (mirrorX)
+            {
+                StretchBlt(hDC, x + x1, y, -x1, y1, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+            }
+            else
+            {
+                TransparentBlt(hDC, x, y, x1, y1, hMemDC, 0, 0, x1, y1, RGB(0, 0, 0));
+            }
         }
         else
         {
-            StretchBlt(hDC, x, y, x1, y1, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY); // Рисуем изображение bitmap
+            if (mirrorX)
+            {
+                StretchBlt(hDC, x + x1, y, -x1, y1, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+            }
+            else
+            {
+                StretchBlt(hDC, x, y, x1, y1, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+            }
         }
 
-        SelectObject(hMemDC, hOldbm);// Восстанавливаем контекст памяти
+        SelectObject(hMemDC, hOldbm);
     }
 
-    DeleteDC(hMemDC); // Удаляем контекст памяти
+    DeleteDC(hMemDC);
 }
 
 void ShowRacketAndBall()
@@ -236,7 +328,7 @@ void ShowRacketAndBall()
         ShowBitmap(window.context, skelet.x, skelet.y, skelet.width, skelet.height, skelet.hBitmap);
     }
 
-    ShowBitmap(window.context, babka.x - babka.width / 2, babka.y - babka.height / 2, babka.width, babka.height, babka.hBitmap); //бабочка
+    ShowBitmap(window.context, Human.x, Human.y, Human.width, Human.height, Human.hBitmap,false, Human.faceLeft);
 
     //ShowBitmap(window.context, ball.x - ball.rad, ball.y - ball.rad, 2 * ball.rad, 2 * ball.rad, ball.hBitmap, true);// шарик
 
@@ -250,13 +342,42 @@ void ShowRacketAndBall()
 
     ShowBitmap(window.context, bite.x, bite.y, bite.width, bite.height, bite.hBitmap); //укус
 
+    if (!doorOpened)
+    {
+        ShowBitmap(window.context, door.x, door.y, door.width, door.height, door.hBitmap);
+    }
+    else
+    {
+        // например, заменить на открытую дверь или просто не рисовать
+    }
+
     if (isSwordActive) {
         ShowBitmap(window.context, sword.x, sword.y, sword.width, sword.height, sword.hBitmap);
     }
     
-
+  
+    ShowBitmap(window.context, inventory.x, inventory.y, inventory.width, inventory.height, inventory.hBitmap);
+    
+    if (!butterflySelected) {
+    
+        ShowBitmap(window.context, babka.x, babka.y, babka.width, babka.height, babka.hBitmap); //бабочка
+    }
+    else {
+    
+    }
+    
+    
 }
 
+
+
+bool MouseClickOnce()
+{
+    bool now = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+    bool clicked = now && !prevLButton; //
+    prevLButton = now;
+    return clicked;
+}
 
 void LimitRacket()
 {
@@ -373,51 +494,101 @@ bool IsMouseOnSprite(int mx, int my, const sprite& s)
 void ProcessInput()
 {
 
-    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+
+    if (MouseClickOnce())
     {
-        if (IsMouseOnSprite(Mouse.x, Mouse.y, babka))
+        if (!butterflyPicked && IsMouseOnSprite(Mouse.x, Mouse.y, babka))
         {
-            // клик по бабке
-            ProcessSound("click.wav");
-            babka.x += 20; // пример реакции
+            butterflyPicked = true;
+            butterflySelected = true;
+            babka.x = inventory.x + 25;
+            babka.y = inventory.y + 15;
+        }
+        else if (butterflySelected && IsMouseOnSprite(Mouse.x, Mouse.y, door))
+        {
+            doorOpened = true;
+            butterflySelected = false;
+            butterflyPicked = false;
+        }
+        else
+        {
+            butterflySelected = false;
         }
     }
 
-    if (GetAsyncKeyState(VK_RBUTTON)) {
-        Hero.y = Mouse.y;
-        Hero.x = Mouse.x;
+    if (GetAsyncKeyState(VK_RBUTTON) & 0x8000)
+    {
+
+        float distanceX = Mouse.x - Hero.x;
+        float distanceY = Mouse.y - Hero.y;
+        float distance = sqrt(distanceX * distanceX + distanceY * distanceY);
+
+        if (distance > 10.f) {
+
+            float directionX = distanceX / distance;
+            float directionY = distanceY / distance;
+
+            //float deltaTime = 0.016f;
+            Hero.x += directionX * Hero.speed;
+            Hero.y += directionY * Hero.speed;
+        }
+
     }
 
-    if (GetAsyncKeyState(VK_RIGHT)) Hero.x += Hero.speed;
+    //if (GetAsyncKeyState(VK_RIGHT) & 0x8000) Hero.x += Hero.speed;
 
-    if (GetAsyncKeyState(VK_SPACE) && !isJumping) {
-        Jump(); //Прыжок на пробел
+    if (GetAsyncKeyState(VK_SPACE) & 0x8000 && !isJumping)
+    {
+        Jump();
     }
 
-    if (!game.action && GetAsyncKeyState(VK_SPACE))
+    if (!game.action && (GetAsyncKeyState(VK_SPACE) & 0x8000))
     {
         game.action = true;
-        ProcessSound("bounce.wav");
     }
-    
-    if (GetAsyncKeyState('C') & 0x8000) {
-        DWORD currentTime = timeGetTime();
 
-        if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
+    if (GetAsyncKeyState('C') & 0x8000)
+    {
+        DWORD currentTime = timeGetTime();
+        if (currentTime - lastAttackTime >= ATTACK_COOLDOWN)
+        {
             isSwordActive = true;
             swordDisplayFrames = SWORD_DISPLAY_DURATION;
             sword.x = Hero.x + Hero.width - 20;
             sword.y = Hero.y + 50;
             lastAttackTime = currentTime;
-            //ProcessSound("sword.wav");
             DamagCalculator();
-            
         }
     }
+
+    bool moving = false;
+
+    if (GetAsyncKeyState(VK_LEFT))
+    {
+        Human.x -= Human.speed;
+        moving = true;
+    }
+
+    if (GetAsyncKeyState(VK_RIGHT))
+    {
+        Human.x += Human.speed;
+        moving = true;
+    }
+
+    if (moving)
+        UpdateAnimation(Human);
+    else
+    {
+        Human.currentFrame = 0;
+        Human.frameTick = 0;
+        Human.hBitmap = Human.frames[0];
+    }
+
+    if (GetAsyncKeyState(VK_LEFT))
+        Human.faceLeft = true;
+    if (GetAsyncKeyState(VK_RIGHT))
+        Human.faceLeft = false;
 }
-
-
-
 
 
 void MoveEnemy() {
@@ -559,11 +730,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         UpdateSwordTimer();
         ProcessInput();//опрос клавиатуры
         
+        
         LimitRacket();//проверяем, чтобы ракетка не убежала за экран
         //LimitFloor();
         ProcessBall();//перемещаем шарик
         ProcessRoom();//обрабатываем отскоки от стен и каретки, попадание шарика в картетку
-        MoveEnemy();
+        //MoveEnemy();
     }
 
 }
