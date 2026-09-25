@@ -13,6 +13,9 @@ const DWORD ATTACK_COOLDOWN = 1500; // 1.5 секунды задержки
 int swordDisplayFrames = 0;
 const int SWORD_DISPLAY_DURATION = 10;
 
+enum GameState { ManeMenu, Loading, Game, Inventory, death_screen };
+GameState status = ManeMenu;
+
 // секци€ данных игры  
 struct sprite {
     float x, y, width, height, rad, dx, dy, speed, jump, speedjump, vy;
@@ -45,7 +48,10 @@ sprite bite; // укус
 sprite inventory; //инвентарь
 sprite door;
 sprite Human;
-
+sprite Meny;
+sprite loading;
+sprite game_death;
+sprite inventory2;
 
 struct {
     int score, balls;//количество набранных очков и оставшихс€ "жизней"
@@ -128,7 +134,12 @@ void InitGame()
     inventory.hBitmap = (HBITMAP)LoadImageA(NULL, "инвентарь.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     door.hBitmap = (HBITMAP)LoadImageA(NULL, "дверь.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     Human.hBitmap = (HBITMAP)LoadImageA(NULL, "1.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-   
+
+    Meny.hBitmap = (HBITMAP)LoadImageA(NULL, "ћеню.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    loading.hBitmap = (HBITMAP)LoadImageA(NULL, "«агрузка.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    game_death.hBitmap = (HBITMAP)LoadImageA(NULL, "Ёкрансмерти.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    inventory2.hBitmap = (HBITMAP)LoadImageA(NULL, "»нвентарь2.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+
 
     //------------------------------------------------------
 
@@ -140,7 +151,7 @@ void InitGame()
     Hero.vy = 0;
     Hero.x = window.width / 2.;//ракетка посередине окна
     Hero.y = window.height - Hero.height;//чуть выше низа экрана - на высоту ракетки
-    Hero.hp = 3;
+    Hero.hp = 5;
     Hero.hpMax = 3;
     Hero.damage = 1;
 
@@ -207,7 +218,27 @@ void InitGame()
     Human.y = window.height / 2;
     Human.vy = 0;
     Human.speed = 20;
-   
+
+    Meny.width = window.width;
+    Meny.height = window.height;
+    Meny.x = 0;
+    Meny.y = 0;
+
+    loading.width = window.width;
+    loading.height = window.height;
+    loading.x = 0;
+    loading.y = 0;
+
+    game_death.width = window.width;
+    game_death.height = window.height;
+    game_death.x = 0;
+    game_death.y = 0;
+
+    inventory2. width = 500;
+    inventory2. height = 400;
+    inventory2.x = 400;
+    inventory2.y = 500;
+
 
     HumanRun[0] = (HBITMAP)LoadImageA(NULL, "1.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     HumanRun[1] = (HBITMAP)LoadImageA(NULL, "2.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
@@ -309,7 +340,11 @@ void ShowBitmap(HDC hDC, int x, int y, int x1, int y1, HBITMAP hBitmapBall, bool
 
 void ShowRacketAndBall()
 {
+   
+
     ShowBitmap(window.context, 0, 0, window.width, window.height, hBack);//задний фон
+    
+
     ShowBitmap(window.context, Hero.x, Hero.y, Hero.width, Hero.height, Hero.hBitmap);// ракетка игрока
 
     if (ball.dy < 0 && (enemy.x - Hero.width / 4 > ball.x || ball.x > enemy.x + Hero.width / 4))
@@ -328,7 +363,7 @@ void ShowRacketAndBall()
         ShowBitmap(window.context, skelet.x, skelet.y, skelet.width, skelet.height, skelet.hBitmap);
     }
 
-    ShowBitmap(window.context, Human.x, Human.y, Human.width, Human.height, Human.hBitmap,false, Human.faceLeft);
+    //ShowBitmap(window.context, Human.x, Human.y, Human.width, Human.height, Human.hBitmap,false, Human.faceLeft);
 
     //ShowBitmap(window.context, ball.x - ball.rad, ball.y - ball.rad, 2 * ball.rad, 2 * ball.rad, ball.hBitmap, true);// шарик
 
@@ -336,11 +371,39 @@ void ShowRacketAndBall()
 
     //ShowBitmap(window.context, indikatorziro.x, indikatorziro.y, indikatorziro.width, indikatorziro.height, indikatorziro.hBitmap); //«доровье грустный
 
-    ShowBitmap(window.context, hp.x, hp.y, hp.width, hp.height, hp.hBitmap); //ракушки
+    //ShowBitmap(window.context, hp.x, hp.y, hp.width, hp.height, hp.hBitmap); //ракушки
 
-    ShowBitmap(window.context, bable.x, bable.y, bable.width, bable.height, bable.hBitmap); //пузрь
 
-    ShowBitmap(window.context, bite.x, bite.y, bite.width, bite.height, bite.hBitmap); //укус
+   
+    const int gap = 8; // рассто€ние между ракушками
+
+    for (int i = 0; i < Hero.hp; i++)
+    {
+        int shellX = hp.x + i * (hp.width + gap);
+
+        ShowBitmap(
+            window.context,
+            shellX,
+            hp.y,
+            hp.width,
+            hp.height,
+            hp.hBitmap
+        );
+    }
+    
+
+    //ShowBitmap(window.context, bable.x, bable.y, bable.width, bable.height, bable.hBitmap); //пузрь
+
+    //ShowBitmap(window.context, bite.x, bite.y, bite.width, bite.height, bite.hBitmap); //укус
+
+
+    
+
+   
+    
+    
+    
+ 
 
     if (!doorOpened)
     {
@@ -356,7 +419,7 @@ void ShowRacketAndBall()
     }
     
   
-    ShowBitmap(window.context, inventory.x, inventory.y, inventory.width, inventory.height, inventory.hBitmap);
+    //ShowBitmap(window.context, inventory.x, inventory.y, inventory.width, inventory.height, inventory.hBitmap);
     
     if (!butterflySelected) {
     
@@ -366,7 +429,31 @@ void ShowRacketAndBall()
     
     }
     
+    if (status == ManeMenu) {
     
+        ShowBitmap(window.context, Meny.x, Meny.y, Meny.width, Meny.height, Meny.hBitmap); //ћеню игры
+    
+    }
+    
+    if (status == Loading) {
+
+        ShowBitmap(window.context, loading.x, loading.y, loading.width, loading.height, loading.hBitmap); //Ёкран загрузки
+
+    }
+
+    
+    if (status == death_screen) {
+
+        ShowBitmap(window.context, game_death.x, game_death.y, game_death.width, game_death.height, game_death.hBitmap); //Ёкран смерти
+
+    }
+
+
+    if (status == Inventory) {
+
+        ShowBitmap(window.context, inventory2.x, inventory2.y, inventory2.width, inventory2.height, inventory2.hBitmap); //»нвентарь
+
+    }
 }
 
 
@@ -588,6 +675,27 @@ void ProcessInput()
         Human.faceLeft = true;
     if (GetAsyncKeyState(VK_RIGHT))
         Human.faceLeft = false;
+
+    if (GetAsyncKeyState(VK_SPACE)) {
+
+        status = Loading;
+    }
+
+    if (GetAsyncKeyState('T')) {
+
+        status = Inventory;
+    }
+
+    if (GetAsyncKeyState('D')) {
+
+        status = death_screen;
+    }
+
+    if (GetAsyncKeyState('G')) {
+
+        status = Game;
+    }
+
 }
 
 
